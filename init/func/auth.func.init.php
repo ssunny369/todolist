@@ -54,6 +54,11 @@ function loggedInUser(){
     }
     return null;
 }
+function isAdmin(){
+    $user = loggedInUser();
+    return $user && $user -> level === 'admin';
+}
+
 
 ///////                 Exam
 function deletePhotoFile($photo){
