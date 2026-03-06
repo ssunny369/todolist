@@ -1,108 +1,160 @@
 <?php
-
-
-function usernameExists($username){
+function usernameExists($username)
+{
     global $db;
     $query = $db->prepare('SELECT * FROM tbl_users WHERE username = ?');
-    $query-> bind_param('s', $username);
+    $query->bind_param('s', $username);
     $query->execute();
-    $result = $query-> get_result();
-    if($result->num_rows){
+    $result =   $query->get_result();
+    if ($result->num_rows) {
         return true;
     }
     return false;
 }
 
-function registerUser($name, $username, $passwd) {
+function registerUser($name, $username, $passwd)
+{
     global $db;
-    if(usernameExists($username)){
+    if (usernameExists($username)) {
         return false;
     }
-    $query = $db-> prepare('INSERT INTO tbl_users (name, username, passwd) VALUES (?,?,?)');
+    $query = $db->prepare('INSERT INTO tbl_users (name,username,passwd) VALUES (?,?,?)');
     $query->bind_param('sss', $name, $username, $passwd);
     $query->execute();
-    if($db ->affected_rows){
+    if ($db->affected_rows) {
         return true;
     }
     return false;
 }
-function logUserIn($username, $passwd){
+
+function logUserIn($username, $passwd)
+{
     global $db;
     $query = $db->prepare('SELECT * FROM tbl_users WHERE username = ? AND passwd = ?');
     $query->bind_param('ss', $username, $passwd);
     $query->execute();
-    $result = $query->get_result();
-    if ($result->num_rows){
+    $result =   $query->get_result();
+    if ($result->num_rows) {
         return $result->fetch_object();
     }
     return false;
 }
 
-function loggedInUser(){
+function loggedInUser()
+{
     global $db;
-    if(!isset($_SESSION['user_id'])){
+    if (!isset($_SESSION['user_id'])) {
         return null;
     }
-
     $user_id = $_SESSION['user_id'];
     $query = $db->prepare('SELECT * FROM tbl_users WHERE id = ?');
     $query->bind_param('d', $user_id);
     $query->execute();
     $result = $query->get_result();
-    if($result->num_rows){
+    if ($result->num_rows) {
         return $result->fetch_object();
     }
     return null;
 }
+
+function isUserHasPassword($passwd)
+{
+    global $db;
+    $user = loggedInUser();
+    $query = $db->prepare(
+        "SELECT * FROM tbl_users WHERE id = ? AND passwd = ?"
+    );
+    $query->bind_param('ss', $user->id, $passwd);
+    $query->execute();
+    $result = $query->get_result();
+    if ($result->num_rows) {
+        return true;
+    }
+    return false;
+}
+
+function setUserNewPassowrd($passwd)
+{
+    global $db;
+    $user = loggedInUser();
+    $query = $db->prepare(
+        "UPDATE tbl_users SET passwd = ? WHERE id = ?"
+    );
+    $query->bind_param('ss',  $passwd, $user->id);
+    $query->execute();
+    if ($db->affected_rows) {
+        return true;
+    }
+    return false;
+}
+
 function isAdmin(){
     $user = loggedInUser();
-    return $user && $user -> level === 'admin';
+    return $user && $user->level === 'admin';
 }
 
 
-///////                 Exam
-function deletePhotoFile($photo){
-    if(!empty($photo) && $photo !== 'emptyuser.png' && file_exists('./assets/images/' . $photo)){
-        unlink('./assets/images/' . $photo);
-    }
-}
-
-function updatePhoto($user){
+function changeProfileImage($image)
+{
     global $db;
-    if(isset($_FILES['photo']) && $_FILES['photo']['error'] === 0){
-
-        $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-        $fileType = mime_content_type($_FILES['photo']['tmp_name']);
-
-        if(!in_array($fileType, $allowedTypes)){
-            echo '<div class="alert alert-warning" role="alert">Only JPG and PNG files are allowed.</div>';
-        } else {
-            $extension     = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
-            $newName = 'user_' . $user->id . '.' . $extension;
-            $destination    = './assets/images/' . $newName;
-
-            deletePhotoFile($user->photo);
-
-            if(move_uploaded_file($_FILES['photo']['tmp_name'], $destination)){
-                $query = $db->prepare('UPDATE tbl_users SET photo = ? WHERE id = ?');
-                $query->bind_param('si', $newName, $user->id);
-                $query->execute();
-                echo '<div class="alert alert-success" role="alert">Photo updated successfully!</div>';
-            } else {
-                echo '<div class="alert alert-danger" role="alert">Failed to save photo to folder.</div>';
-            }
-        }
-
-    } else {
-        echo '<div class="alert alert-warning" role="alert">Please select a photo.</div>';
+    $user = loggedInUser();
+    $image_path = uploadImage($image);
+    if ($image_path && $user->photo) {
+        unlink($user->photo);
     }
-}
-
-function deletePhoto($user){
-    global $db;
-    deletePhotoFile($user->photo);
-    $query = $db->prepare('UPDATE tbl_users SET photo = NULL WHERE id = ?');
-    $query->bind_param('i', $user->id);
+    $query = $db->prepare('UPDATE tbl_users SET photo = ? WHERE id = ?');
+    $query->bind_param('sd', $image_path, $user->id);
     $query->execute();
-    echo '<div class="alert alert-success" role="alert">Photo deleted successfully!</div>';
+    if ($db->affected_rows) {
+        return true;
+    }
+    return false;
+}
+
+function deleteProfileImage()
+{
+    global $db;
+    $user = loggedInUser();
+    if ($user->photo) {
+        unlink($user->photo);
+    }
+    $query = $db->prepare('UPDATE tbl_users SET photo = NULL WHERE id = ?');
+    $query->bind_param('d', $user->id);
+    $query->execute();
+    if ($db->affected_rows) {
+        return true;
+    }
+    return false;
+}
+
+
+function uploadImage($image)
+{
+    $img_name = $image['name'];
+    $img_size = $image['size'];
+    $tmp_name = $image['tmp_name'];
+    $error = $image['error'];
+
+    $dir = './assets/images/';
+
+    $allow_exs = ['jpg', 'png', 'jpeg'];
+    $image_ex = pathinfo($img_name, PATHINFO_EXTENSION);
+    $image_lowercase_ex = strtolower($image_ex);
+
+    if (!in_array($image_lowercase_ex, $allow_exs)) {
+        throw new Exception('File extension is not allowed!');
+    }
+
+    if ($error !== 0) {
+        throw new Exception('Unknown error occurred!');
+    }
+
+    if ($img_size > 500000) {
+        throw new Exception('File size is too large!');
+    }
+
+    $new_image_name = uniqid("PI-") . '.' . $image_lowercase_ex;
+    $image_path = $dir . $new_image_name;
+    move_uploaded_file($tmp_name, $image_path);
+    return $image_path;
 }
