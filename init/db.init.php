@@ -1,6 +1,6 @@
 <?php
 $db_host = '127.0.0.1'; // localhost
-$db_name = 'g19bcsy3c';
+$db_name = 'todolist';
 $db_user = 'root';
 $db_pass = '';
 $db_port = 3306;

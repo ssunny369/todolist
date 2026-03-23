@@ -4,10 +4,15 @@ $user = loggedInUser();
 $isAdmin = isAdmin();
 include './includes/header.inc.php';
 include './includes/navbar.inc.php';
-$available_pages = ['login', 'register', 'logout', 'dashboard', 'profile', 'user/list', 'user/create'];
 $logged_in_pages = ['dashboard', 'profile'];
 $non_logged_in_pages = ['login', 'register'];
-$admin_pages = ['user/list', 'user/create'];
+$admin_pages = ['user/list', 'user/create', 'user/update', 'user/delete'];
+
+$available_pages = [ // array destructuring // ... spread operator
+    'logout',
+    ...$non_logged_in_pages, 
+    ...$logged_in_pages, 
+    ...$admin_pages];
 
 $page = '';
 if (isset($_GET['page'])) {
