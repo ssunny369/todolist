@@ -47,11 +47,13 @@ function loggedInUser()
         return null;
     }
     $user_id = $_SESSION['user_id'];
+
     $query = $db->prepare('SELECT * FROM tbl_users WHERE id = ?');
-    $query->bind_param('d', $user_id);
+    $query->bind_param('i', $user_id); 
     $query->execute();
     $result = $query->get_result();
-    if ($result->num_rows) {
+    
+    if ($result && $result->num_rows > 0) {
         return $result->fetch_object();
     }
     return null;
@@ -98,17 +100,18 @@ function changeProfileImage($image)
 {
     global $db;
     $user = loggedInUser();
+    if (!$user) return false; 
+
     $image_path = uploadImage($image);
-    if ($image_path && $user->photo) {
+    if ($image_path && !empty($user->photo) && file_exists($user->photo)) {
         unlink($user->photo);
     }
+    
     $query = $db->prepare('UPDATE tbl_users SET photo = ? WHERE id = ?');
-    $query->bind_param('sd', $image_path, $user->id);
+    $query->bind_param('si', $image_path, $user->id);
     $query->execute();
-    if ($db->affected_rows) {
-        return true;
-    }
-    return false;
+    
+    return $db->affected_rows > 0;
 }
 
 function deleteProfileImage()

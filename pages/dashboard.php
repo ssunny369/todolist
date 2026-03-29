@@ -1,7 +1,4 @@
 <?php
-    echo isAdmin() ? 'ADMIN' : 'USER';
-?>
-<?php
 $user = loggedInUser();
 if (empty($user)) {
     echo '<script>window.location = "./?page=login";</script>';
@@ -9,6 +6,8 @@ if (empty($user)) {
 }
 
 $todo = '';
+$deadline = '';
+$priority = 1;
 $todoErr = '';
 $message = '';
 
@@ -17,12 +16,15 @@ if (isset($_POST['todo_action'])) {
 
     if ($action === 'add') {
         $todo = trim($_POST['todo']);
+        $deadline = $_POST['deadline'] ?? null;
+        $priority = (int)($_POST['priority'] ?? 1);
+
         if (empty($todo)) {
             $todoErr = 'Please input your task!';
         }
 
         if (empty($todoErr)) {
-            if (createTodo($user->id, $todo)) {
+            if (createTodo($user->id, $todo, $priority, $deadline)) {
                 echo '<script>window.location = "./?page=dashboard";</script>';
                 exit();
             } else {
@@ -62,134 +64,93 @@ while ($row = $todoResult->fetch_object()) {
         $activeTodo++;
     }
 }
+
+// Sort: Priority First, then Created Date
+usort($todoList, function ($a, $b) {
+    if ($b->priority === $a->priority) {
+        return strtotime($b->created_at) <=> strtotime($a->created_at);
+    }
+    return $b->priority <=> $a->priority;
+});
+
+// Define the helper function at the top so it's ready for the loops below
+function renderTodoItem($todoItem)
+{
+    $priorityMap = [
+        3 => ['label' => 'In a Hurry ⚡', 'class' => 'bg-danger'],
+        2 => ['label' => 'Important ⭐', 'class' => 'bg-warning text-dark'],
+        1 => ['label' => 'Normal', 'class' => 'bg-light text-dark border']
+    ];
+    $p = $priorityMap[$todoItem->priority] ?? $priorityMap[1];
 ?>
+    <div class="todo-item mb-3 p-2 border-bottom <?php echo $todoItem->is_done ? 'opacity-75' : ''; ?>">
+        <div class="d-flex justify-content-between align-items-center gap-3">
+            <div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge <?php echo $p['class']; ?> small"><?php echo $p['label']; ?></span>
+                    <span class="todo-text fw-semibold <?php echo $todoItem->is_done ? 'text-decoration-line-through text-secondary' : ''; ?>">
+                        <?php echo htmlspecialchars($todoItem->task); ?>
+                    </span>
+                </div>
+                <small class="text-secondary d-block mt-1">
+                    Deadline: <?php echo $todoItem->deadline ? date('M d, Y', strtotime($todoItem->deadline)) : 'No deadline'; ?>
+                </small>
+            </div>
 
-<style>
-    body {
-        background: #070707;
-        color: #f5f5f5;
-    }
+            <div class="d-flex gap-2">
+                <form method="post" action="./?page=dashboard" class="m-0">
+                    <input type="hidden" name="todo_action" value="toggle">
+                    <input type="hidden" name="todo_id" value="<?php echo $todoItem->id; ?>">
+                    <button type="submit" class="btn btn-sm <?php echo $todoItem->is_done ? 'btn-outline-secondary' : 'btn-success'; ?>">
+                        <?php echo $todoItem->is_done ? 'Undo' : 'Done'; ?>
+                    </button>
+                </form>
 
-    .navbar {
-        background: #0d0d0d !important;
-        border-bottom: 1px solid #222;
-    }
+                <form method="post" action="./?page=dashboard" class="m-0" onsubmit="return confirm('Delete permanently?')">
+                    <input type="hidden" name="todo_action" value="delete">
+                    <input type="hidden" name="todo_id" value="<?php echo $todoItem->id; ?>">
+                    <button type="submit" class="btn btn-sm btn-danger">
+                        Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+<?php } ?>
 
-    .navbar .nav-link,
-    .navbar .navbar-brand {
-        color: #f5f5f5 !important;
-    }
-
-    .todo-wrap {
-        max-width: 1100px;
-        margin: 30px auto;
-    }
-
-    .todo-hero {
-        background: linear-gradient(135deg, #111 0%, #1a1a1a 100%);
-        border: 1px solid #2a2a2a;
-        border-radius: 22px;
-        padding: 28px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, .45);
-    }
-
-    .todo-card {
-        background: #101010;
-        border: 1px solid #262626;
-        border-radius: 18px;
-        box-shadow: 0 15px 35px rgba(0, 0, 0, .35);
-    }
-
-    .todo-input {
-        background: #151515 !important;
-        border: 1px solid #2e2e2e !important;
-        color: #fff !important;
-    }
-
-    .todo-input:focus {
-        box-shadow: none !important;
-        border-color: #777 !important;
-    }
-
-    .todo-item {
-        background: #121212;
-        border: 1px solid #242424;
-        border-radius: 16px;
-        padding: 16px 18px;
-        margin-bottom: 12px;
-    }
-
-    .todo-item.done {
-        opacity: .78;
-        border-color: #333;
-    }
-
-    .todo-item.done .todo-text {
-        text-decoration: line-through;
-        color: #9a9a9a;
-    }
-
-    .stat-box {
-        background: #0f0f0f;
-        border: 1px solid #262626;
-        border-radius: 16px;
-        padding: 16px;
-    }
-
-    .btn-dark-soft {
-        background: #f1f1f1;
-        color: #000;
-        border: none;
-    }
-
-    .btn-dark-soft:hover {
-        background: #dcdcdc;
-        color: #000;
-    }
-
-    .btn-outline-soft {
-        border-color: #444;
-        color: #f5f5f5;
-    }
-
-    .btn-outline-soft:hover {
-        background: #222;
-        color: #fff;
-    }
-</style>
-
-<div class="todo-wrap container">
+<div class="todo-wrap container mt-4">
     <div class="todo-hero mb-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
                 <h2 class="mb-1">Todo Dashboard</h2>
                 <div class="text-secondary">
-                    <?php echo htmlspecialchars($user->name); ?> — 
+                    <?php echo htmlspecialchars($user->name); ?> —
                     <?php echo isAdmin() ? 'ADMIN' : 'USER'; ?>
                 </div>
             </div>
             <div class="text-end">
                 <div class="text-secondary">Today</div>
                 <div class="fs-5"><?php echo date('F d, Y'); ?></div>
+                <div id="real-time-clock" class="fw-bold text-primary small"></div>
             </div>
         </div>
 
         <div class="row g-3 mt-3">
             <div class="col-md-4">
                 <div class="stat-box">
-                    <div class="text-secondary">Total Tasks</div>
+                    <div class="text-secondary small">Total Tasks</div>
                     <div class="fs-3 fw-bold"><?php echo $totalTodo; ?></div>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="stat-box">
-                    <div class="text-secondary">Active</div>
+                    <div class="text-secondary small">Active</div>
                     <div class="fs-3 fw-bold"><?php echo $activeTodo; ?></div>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="stat-box">
-                    <div class="text-secondary">Done</div>
+                    <div class="text-secondary small">Done</div>
                     <div class="fs-3 fw-bold"><?php echo $doneTodo; ?></div>
                 </div>
             </div>
@@ -202,61 +163,77 @@ while ($row = $todoResult->fetch_object()) {
         <h4 class="mb-3">Add New Task</h4>
         <form method="post" action="./?page=dashboard">
             <input type="hidden" name="todo_action" value="add">
-            <div class="row g-2 align-items-start">
-                <div class="col-md-10">
+
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label small fw-bold text-muted">Task Description</label>
                     <input name="todo" value="<?php echo htmlspecialchars($todo); ?>" type="text"
                         class="form-control todo-input <?php echo empty($todoErr) ? '' : 'is-invalid'; ?>"
-                        placeholder="Write your task here...">
-                    <div class="invalid-feedback">
-                        <?php echo $todoErr; ?>
-                    </div>
+                        placeholder="What needs to be done?">
+                    <div class="invalid-feedback"><?php echo $todoErr; ?></div>
                 </div>
-                <div class="col-md-2 d-grid">
-                    <button type="submit" class="btn btn-dark-soft fw-bold">Add Task</button>
+
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted">Priority</label>
+                    <select name="priority" class="form-select">
+                        <option value="3">In a Hurry ⚡</option>
+                        <option value="2">Important ⭐</option>
+                        <option value="1" selected>Normal</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted">Deadline</label>
+                    <input name="deadline" type="date" class="form-control" value="<?php echo htmlspecialchars($deadline); ?>">
+                </div>
+
+                <div class="col-md-2 d-grid align-self-end">
+                    <button type="submit" class="btn btn-dark-soft fw-bold">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-square-fill" viewBox="0 0 16 16">
+                            <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0" />
+                        </svg>
+                        Add Task</button>
                 </div>
             </div>
         </form>
     </div>
 
-    <div class="todo-card p-4">
+    <div class="todo-card p-4 mb-4">
         <h4 class="mb-3">My Tasks</h4>
+        <?php
+        $activeTasks = array_filter($todoList, fn($t) => !$t->is_done);
+        $completedTasks = array_filter($todoList, fn($t) => $t->is_done);
 
-        <?php if (empty($todoList)) { ?>
-            <div class="text-secondary">No task yet. Add one above.</div>
-        <?php } else { ?>
-            <?php foreach ($todoList as $todoItem) { ?>
-                <div class="todo-item <?php echo $todoItem->is_done ? 'done' : ''; ?>">
-                    <div class="d-flex justify-content-between align-items-center gap-3">
-                        <div>
-                            <div class="todo-text fw-semibold">
-                                <?php echo htmlspecialchars($todoItem->task); ?>
-                            </div>
-                            <small class="text-secondary">
-                                Created: <?php echo date('M d, Y h:i A', strtotime($todoItem->created_at)); ?>
-                            </small>
-                        </div>
+        if (empty($activeTasks)) { ?>
+            <div class="text-secondary mb-4 p-3 border rounded text-center">No pending tasks! 🎉</div>
+        <?php } else {
+            foreach ($activeTasks as $todoItem) {
+                renderTodoItem($todoItem);
+            }
+        } ?>
 
-                        <div class="d-flex gap-2">
-                            <form method="post" action="./?page=dashboard" class="m-0">
-                                <input type="hidden" name="todo_action" value="toggle">
-                                <input type="hidden" name="todo_id" value="<?php echo $todoItem->id; ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-success">
-                                    <?php echo $todoItem->is_done ? 'Undo' : 'Done'; ?>
-                                </button>
-                            </form>
-
-                            <form method="post" action="./?page=dashboard" class="m-0"
-                                onsubmit="return confirm('Delete this task?')">
-                                <input type="hidden" name="todo_action" value="delete">
-                                <input type="hidden" name="todo_id" value="<?php echo $todoItem->id; ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    Delete
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            <?php } ?>
-        <?php } ?>
+        <?php if (!empty($completedTasks)) { ?>
+            <hr class="my-4">
+            <h4 class="mb-3 text-success">Completed Tasks</h4>
+        <?php foreach ($completedTasks as $todoItem) {
+                renderTodoItem($todoItem);
+            }
+        } ?>
     </div>
 </div>
+
+<script>
+    function updateTime() {
+        const now = new Date();
+        const options = {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        };
+        const timeString = now.toLocaleTimeString(undefined, options);
+        document.getElementById('real-time-clock').textContent = timeString;
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+</script>
