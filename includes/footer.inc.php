@@ -3,6 +3,7 @@
         crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="assets/js/index.js"></script>
+<script src="assets/js/alerts.js"></script>
 </body>
 
 </html>

@@ -39,4 +39,5 @@ function deleteTodo($id, $user_id)
     $query->execute();
     return $db->affected_rows > 0;
 }
+
 ?>

@@ -1,6 +1,8 @@
 <?php
 $username = '';
 $usernameErr = $passwdErr = '';
+$loginError = false;
+
 if (isset($_POST['username'], $_POST['passwd'])) {
     $username = trim($_POST['username']);
     $passwd = trim($_POST['passwd']);
@@ -11,15 +13,16 @@ if (isset($_POST['username'], $_POST['passwd'])) {
     if (empty($passwd)) {
         $passwdErr = 'Please input password!';
     }
+    
     if (empty($usernameErr) && empty($passwdErr)) {
         $user = logUserIn($username, $passwd);
         if ($user !== false) {
             $_SESSION['user_id'] = $user->id;
             header('Location: ./?page=dashboard');
+            exit();
         } else {
-            echo '<div class= "alert-danger" role="alert">
-            Login failed!
-            </div>';
+            // Set a flag instead of echoing HTML
+            $loginError = true;
         }
     }
 }
